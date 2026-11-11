@@ -43,9 +43,47 @@ SERVER = os.environ.get("CLICK_SERVER") or CONFIG["server"]   # an override can 
 PUBLIC_KEY = bytes.fromhex(CONFIG["public_key"])
 MAC = sys.platform == "darwin"
 OS = "mac" if MAC else "win"  # the server sends the engine and the libraries built for this system
-DATA = os.environ.get("CLAUDE_PLUGIN_DATA") or os.environ.get("PLUGIN_DATA") or (
-    os.path.join(os.path.expanduser("~"), "Library", "Application Support", "ClickVideo") if MAC else
-    os.path.join(os.environ.get("LOCALAPPDATA", os.path.expanduser("~")), "ClickVideo"))
+HOME_DIR = (os.path.join(os.path.expanduser("~"), "Library", "Application Support", "ClickVideo") if MAC else
+            os.path.join(os.environ.get("LOCALAPPDATA", os.path.expanduser("~")), "ClickVideo"))
+POINTER = os.path.join(HOME_DIR, "plugin-data.txt")  # Mac: where the AI client keeps our data (UTF-8 text, read by start.sh)
+LINK = os.path.join(HOME_DIR, "data")                 # Windows: a junction to it (start.cmd cannot read letters like ộ from a file)
+
+
+def _pointed():
+    """Where the AI client keeps our data, for click-engine run from a terminal (11/11: the terminal is not told)."""
+    try:
+        if MAC:
+            p = open(POINTER, encoding="utf-8").read().strip()
+        else:
+            p = os.path.realpath(LINK) if os.path.isjunction(LINK) else ""
+        return p if p and os.path.isdir(p) else ""
+    except OSError:
+        return ""
+
+
+DATA = os.environ.get("CLAUDE_PLUGIN_DATA") or os.environ.get("PLUGIN_DATA") or _pointed() or HOME_DIR
+
+
+def remember_data():
+    """The AI client tells only the plugin's own process where its data is (CLAUDE_PLUGIN_DATA / PLUGIN_DATA). A terminal it
+    opens later (click-engine wait, run by the AI for the Brief form) does not get it: noted here at every start. Windows: the
+    junction %LOCALAPPDATA%\\ClickVideo\\data (an ASCII path start.cmd can use whatever the user's name); Mac: a text file."""
+    if not (os.environ.get("CLAUDE_PLUGIN_DATA") or os.environ.get("PLUGIN_DATA")):
+        return
+    try:
+        os.makedirs(HOME_DIR, exist_ok=True)
+        if MAC:
+            with open(POINTER, "w", encoding="utf-8") as f:
+                f.write(DATA)
+            return
+        if os.path.isjunction(LINK) and os.path.normcase(os.path.realpath(LINK)) == os.path.normcase(os.path.realpath(DATA)):
+            return
+        if os.path.isjunction(LINK):
+            os.rmdir(LINK)  # removes the link only
+        if not os.path.exists(LINK):
+            subprocess.run(["cmd", "/d", "/c", "mklink", "/J", LINK, DATA], capture_output=True)
+    except OSError as e:
+        log("không ghi được chỉ dẫn thư mục dữ liệu:", e)
 RUNTIME = os.path.join(DATA, "runtime")
 SITE = os.path.join(RUNTIME, "lib", "python3.12", "site-packages") if MAC else os.path.join(RUNTIME, "Lib", "site-packages")
 ENGINES = os.path.join(DATA, "engine")
@@ -414,7 +452,8 @@ def prepare():
         except RuntimeError as e:
             log(e)
         install_wheels(m)
-        if not cur or (cur["version"] != m["version"] and m.get("bat_buoc")):
+        fresh = not os.path.isdir(os.path.join(DATA, "app", "scripts"))  # not installed yet: no project to protect, take the fixed one
+        if not cur or (cur["version"] != m["version"] and (m.get("bat_buoc") or fresh)):
             log("bộ máy mới", m["version"], "(đang có", cur and cur["version"], ")")
             install_engine(m)
             set_pending(None)
@@ -741,9 +780,11 @@ def main(argv):
     cmd = argv[1] if len(argv) > 1 else "serve"
     threading.Thread(target=drop_old_runtime, daemon=True).start()
     if cmd == "serve":
+        remember_data()
         Mcp().run()
         return 0
     if cmd == "cli":  # click-engine wait | status | activate
+        os.environ.setdefault("CLAUDE_PLUGIN_DATA", DATA)  # the engine finds the same folder (from plugin-data.txt in a terminal)
         try:
             server, _ = prepare()
         except NeedEula as e:

@@ -10,6 +10,8 @@ rem Windows' own tools by full path (11/11): Git for Windows puts its GNU tar, w
 set "SYS=%SystemRoot%\System32"
 set "D=%CLAUDE_PLUGIN_DATA%"
 if not defined D set "D=%PLUGIN_DATA%"
+rem a terminal (click-engine run by the AI) is not told where the data is: bootstrap.py links it as ClickVideo\data
+if not defined D if exist "%LOCALAPPDATA%\ClickVideo\data\runtime\python.exe" set "D=%LOCALAPPDATA%\ClickVideo\data"
 if not defined D set "D=%LOCALAPPDATA%\ClickVideo"
 set "PY=%D%\runtime\python.exe"
 rem The customer moved the heavy data to another drive (tool chon_thu_muc_du_lieu): Python was copied there and linked as
