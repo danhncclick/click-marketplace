@@ -33,6 +33,24 @@ default_tools_approval_mode = "approve"
 
 Key: lần đầu nhắn "dựng video", trợ lý sẽ hỏi key, bạn dán key vào khung chat. Key được lưu mã hoá trên máy, chỉ hỏi một lần. Hoặc đặt sẵn biến môi trường `CLICK_LICENSE_KEY` trước khi mở Codex. Lần đầu dùng, trợ lý cho bạn xem Thoả thuận cấp phép và chờ bạn đồng ý.
 
+## Máy Mac (chip Apple M, macOS 13 trở lên)
+
+Cùng repo, plugin `click-video-mac`. Claude Code:
+
+```
+/plugin marketplace add danhncclick/click-marketplace
+/plugin install click-video-mac@click-media
+```
+
+Codex:
+
+```
+codex plugin marketplace add danhncclick/click-marketplace
+codex plugin add click-video-mac@click-media
+```
+
+Bỏ hỏi cho phép trong Codex: `[plugins."click-video-mac@click-media".mcp_servers.click-video]` với `default_tools_approval_mode = "approve"`. Bộ khởi động `plugins/click-video-mac/bootstrap/start.sh` tải Python chính thức (python-build-standalone) và kiểm mã SHA-256 trước khi chạy. Bản nháp CapCut trên Mac mặc định ở `~/Movies/CapCut`.
+
 ## Dung lượng
 
 Bản cài cần khoảng 7–12 GB. Ổ C ít chỗ thì nói với trợ lý một thư mục trên ổ khác (ví dụ `E:\ClickVideo`): trợ lý chuyển phần nặng sang đó, trước hoặc sau khi cài.
