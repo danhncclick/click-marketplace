@@ -6,6 +6,8 @@ rem Nothing may be printed on stdout: it is the channel to Claude Code. Messages
 rem Downloads work inside the data folder with short relative names, so a user folder with spaces or Vietnamese letters
 rem (C:\Users\Nguyen Van A, or a name with Vietnamese letters) never reaches curl, certutil or tar as a full path.
 setlocal EnableExtensions
+rem Windows' own tools by full path (11/11): Git for Windows puts its GNU tar, which cannot read a .zip, first on PATH.
+set "SYS=%SystemRoot%\System32"
 set "D=%CLAUDE_PLUGIN_DATA%"
 if not defined D set "D=%PLUGIN_DATA%"
 if not defined D set "D=%LOCALAPPDATA%\ClickVideo"
@@ -24,13 +26,13 @@ set "SHA=4acbed6dd1c744b0376e3b1cf57ce906f9dc9e95e68824584c8099a63025a3c3"
 if not exist "%D%\cache" mkdir "%D%\cache"
 if not exist "%D%\runtime" mkdir "%D%\runtime"
 pushd "%D%\cache" || (echo CLICK: khong mo duoc thu muc du lieu 1>&2 & exit /b 1)
-curl.exe -sSfL --retry 3 -o python-embed.zip "%URL%" 1>nul 2>nul
+"%SYS%\curl.exe" -sSfL --retry 3 -o python-embed.zip "%URL%" 1>nul 2>nul
 if errorlevel 1 (popd & echo CLICK: khong tai duoc Python tu python.org 1>&2 & exit /b 1)
 set "GOT="
-for /f "skip=1 delims=" %%h in ('certutil -hashfile python-embed.zip SHA256') do if not defined GOT set "GOT=%%h"
+for /f "skip=1 delims=" %%h in ('"%SYS%\certutil.exe" -hashfile python-embed.zip SHA256') do if not defined GOT set "GOT=%%h"
 set "GOT=%GOT: =%"
 if /i not "%GOT%"=="%SHA%" (del python-embed.zip & popd & echo CLICK: ma kiem tra cua Python khong khop, da xoa tep tai ve 1>&2 & exit /b 1)
-tar.exe -xf python-embed.zip -C ..\runtime 1>nul 2>nul
+"%SYS%\tar.exe" -xf python-embed.zip -C ..\runtime 1>nul 2>nul
 if errorlevel 1 (popd & echo CLICK: khong giai nen duoc Python 1>&2 & exit /b 1)
 popd
 rem site-packages on: the engine's libraries go there (Lib, DLLs: tkinter, added later by the installer)
