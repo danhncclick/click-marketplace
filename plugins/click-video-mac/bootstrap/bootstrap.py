@@ -452,7 +452,8 @@ def prepare():
         except RuntimeError as e:
             log(e)
         install_wheels(m)
-        if not cur or (cur["version"] != m["version"] and m.get("bat_buoc")):
+        fresh = not os.path.isdir(os.path.join(DATA, "app", "scripts"))  # not installed yet: no project to protect, take the fixed one
+        if not cur or (cur["version"] != m["version"] and (m.get("bat_buoc") or fresh)):
             log("bộ máy mới", m["version"], "(đang có", cur and cur["version"], ")")
             install_engine(m)
             set_pending(None)
