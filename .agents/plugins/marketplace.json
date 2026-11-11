@@ -1,11 +1,29 @@
 {
   "name": "click-media",
-  "interface": {"displayName": "CLICK Media"},
+  "interface": {
+    "displayName": "CLICK Media"
+  },
   "plugins": [
     {
       "name": "click-video",
-      "source": {"source": "local", "path": "./plugins/click-video"},
-      "policy": {"installation": "AVAILABLE"},
+      "source": {
+        "source": "local",
+        "path": "./plugins/click-video"
+      },
+      "policy": {
+        "installation": "AVAILABLE"
+      },
+      "category": "Productivity"
+    },
+    {
+      "name": "click-video-mac",
+      "source": {
+        "source": "local",
+        "path": "./plugins/click-video-mac"
+      },
+      "policy": {
+        "installation": "AVAILABLE"
+      },
       "category": "Productivity"
     }
   ]
