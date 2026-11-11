@@ -13,7 +13,11 @@ Trả lời người dùng bằng tiếng Việt. Mọi việc đi qua các tool
    - **Cần đồng ý Thoả thuận cấp phép:** nếu trợ lý không tự hiện hộp hỏi, gọi `xem_thoa_thuan`, đưa nguyên văn cho người dùng đọc, chờ chính người dùng gõ đồng ý, rồi mới gọi `dong_y_thoa_thuan` với nguyên văn câu đó. Không tự đồng ý thay.
    - **Lỗi giấy phép khác:** đọc lỗi cho người dùng.
    - **`du_lieu` có `canh_bao` (ổ ít chỗ):** hỏi người dùng một thư mục trên ổ khác còn trống, gọi `chon_thu_muc_du_lieu`, theo dõi `trang_thai` › `du_lieu` › `chuyen` đến khi xong. Nếu có `cho_khoi_dong_lai`, nhờ người dùng mở lại trợ lý AI (phiên mới) rồi mới cài. Người dùng muốn đổi ổ sau khi đã cài cũng gọi tool này.
-   - **`da_cai` là false:** gọi `cai_dat`, báo người dùng việc cài chạy nền (tải Python, FFmpeg, Node, mô hình nhận giọng, bộ máy dựng; vài GB lần đầu), rồi gọi `trang_thai` thưa dần để báo tiến độ. Kể cho người dùng phần `phan_cung`: máy chạy kiểu nào, ước tính thời gian, cảnh báo nếu có.
+   - **Có `ban_moi` (bản mới):** báo người dùng ngay, kèm `ghi_chu` nếu có. Khuyên làm xong dự án đang dở rồi mới cập nhật; dự án đã làm vẫn giữ nguyên. Không bao giờ tự cập nhật. Người dùng đồng ý thì gọi `cap_nhat` và dặn mở phiên mới; ở phiên mới `da_cai` là false thì làm như dưới đây.
+   - **`da_cai` là false:** gọi `cai_dat`, rồi báo ngay cho người dùng: việc cài đã bắt đầu, sẽ tải vài GB lần đầu (Python, FFmpeg, Node, mô hình nhận giọng, bộ máy dựng) và bạn sẽ báo tiến độ liên tục. Kể phần `phan_cung`: máy chạy kiểu nào, ước tính thời gian, cảnh báo nếu có.
+     - Sau đó gọi `cho_cai_dat` lặp lại cho tới khi `xong` hoặc có `loi`. **Mỗi lần nhận về, viết câu `bao_khach` vào khung chat**, không im lặng giữa chừng.
+     - **Cài xong:** làm theo `viec_tiep_theo`. Gọi `mo_brief`, gửi người dùng đường dẫn `url` và dặn: mở bằng trình duyệt (Chrome, Edge hoặc Safari), điền Brief cho video đầu tiên, chọn file video hoặc file giọng, rồi bấm gửi cho AI. Rồi chạy nền `click-engine wait` (xem phần Mỗi dự án).
+     - **Có lỗi:** đọc lỗi cho người dùng, gọi lại `cai_dat` để cài tiếp từ chỗ dừng; phần đã xong không tải lại.
 2. Gọi `lay_quy_tac("tong-quan")` một lần để biết quy trình.
 3. Nếu người dùng muốn lưu dự án ở thư mục khác, hoặc dùng thư mục bản nháp CapCut hay thư mục nhạc riêng: gọi `chon_thu_muc` với đường dẫn đầy đủ.
 

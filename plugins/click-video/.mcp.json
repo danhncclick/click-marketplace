@@ -2,13 +2,14 @@
   "mcpServers": {
     "click-video": {
       "command": "cmd",
-      "args": ["/d", "/c", "${CLAUDE_PLUGIN_ROOT}\\bootstrap\\start.cmd", "serve"],
+      "args": [
+        "/d",
+        "/c",
+        "${CLAUDE_PLUGIN_ROOT}\\bootstrap\\start.cmd",
+        "serve"
+      ],
       "env": {
-        "CLICK_LICENSE": "${user_config.license_key}",
-        "CLICK_WORKSPACE": "${CLAUDE_PROJECT_DIR}",
-        "CLICK_WORK_FOLDER": "${user_config.work_folder}",
-        "CLICK_DRAFTS": "${user_config.drafts_folder}",
-        "CLICK_MUSIC": "${user_config.music_folder}"
+        "CLICK_WORKSPACE": "${CLAUDE_PROJECT_DIR}"
       }
     }
   }

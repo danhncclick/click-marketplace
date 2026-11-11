@@ -12,10 +12,12 @@ What it does, in order:
    through two tools Claude may call only on the user's own words.
 5. Loads the engine (compiled Python modules) and hands the AI's tool calls to it. At every start: a newer engine replaces the
    old one (same checks); offline, the installed engine is used, re-checked against its signed manifest.
-Nothing else is downloaded or run here. Files: %CLAUDE_PLUGIN_DATA% or %PLUGIN_DATA% (Codex), else %LOCALAPPDATA%\\ClickVideo.
-Same bootstrap for Claude Code and Codex (user 10/11): the key comes from the plugin's settings (Claude Code), the
-CLICK_LICENSE_KEY variable, or the kich_hoat tool (asked in the chat, kept encrypted for this Windows user with DPAPI).
-Usage: start.cmd serve | start.cmd cli <wait|status|activate KEY>
+Nothing else is downloaded or run here. Files: %CLAUDE_PLUGIN_DATA% or %PLUGIN_DATA% (Codex), else %LOCALAPPDATA%\\ClickVideo
+(Windows) or ~/Library/Application Support/ClickVideo (Mac).
+Same bootstrap for Claude Code and Codex, Windows and macOS (user 10/11, 11/11): the key comes from the plugin's settings
+(Claude Code), the CLICK_LICENSE_KEY variable, or the kich_hoat tool (asked in the chat, kept for this user only: DPAPI on
+Windows, the login Keychain on the Mac).
+Usage: start.cmd serve | start.cmd cli <wait|status|activate KEY>   (Mac: sh start.sh …)
 """
 import base64
 import concurrent.futures
@@ -26,6 +28,7 @@ import json
 import os
 import re
 import shutil
+import subprocess
 import sys
 import threading
 import time
@@ -38,9 +41,13 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 CONFIG = json.load(open(os.path.join(HERE, "config.json"), encoding="utf-8"))
 SERVER = os.environ.get("CLICK_SERVER") or CONFIG["server"]   # an override can only point at a server that signs with the same key
 PUBLIC_KEY = bytes.fromhex(CONFIG["public_key"])
-DATA = os.environ.get("CLAUDE_PLUGIN_DATA") or os.environ.get("PLUGIN_DATA") or os.path.join(os.environ.get("LOCALAPPDATA", os.path.expanduser("~")), "ClickVideo")
+MAC = sys.platform == "darwin"
+OS = "mac" if MAC else "win"  # the server sends the engine and the libraries built for this system
+DATA = os.environ.get("CLAUDE_PLUGIN_DATA") or os.environ.get("PLUGIN_DATA") or (
+    os.path.join(os.path.expanduser("~"), "Library", "Application Support", "ClickVideo") if MAC else
+    os.path.join(os.environ.get("LOCALAPPDATA", os.path.expanduser("~")), "ClickVideo"))
 RUNTIME = os.path.join(DATA, "runtime")
-SITE = os.path.join(RUNTIME, "Lib", "site-packages")
+SITE = os.path.join(RUNTIME, "lib", "python3.12", "site-packages") if MAC else os.path.join(RUNTIME, "Lib", "site-packages")
 ENGINES = os.path.join(DATA, "engine")
 UA = "click-bootstrap/" + CONFIG.get("version", "1")
 
@@ -130,8 +137,21 @@ def check_manifest(m):
 
 
 # ---------------------------------------------------------------- the licence server
+def _out(cmd):
+    try:
+        return subprocess.run(cmd, capture_output=True, text=True, timeout=20).stdout
+    except (OSError, subprocess.SubprocessError):
+        return ""
+
+
 def machine_id():
-    """Same as the engine: a hash of this Windows install and its hardware (registry only), never the raw values."""
+    """Same as the engine (click_engine/plat.py): a hash of this install and its hardware, never the raw values.
+    Windows: the registry. Mac: the platform UUID (ioreg), the model and the chip (sysctl)."""
+    if MAC:
+        m = re.search(r'"IOPlatformUUID"\s*=\s*"([^"]+)"', _out(["/usr/sbin/ioreg", "-rd1", "-c", "IOPlatformExpertDevice"]))
+        vals = ["mac", m.group(1) if m else "", _out(["/usr/sbin/sysctl", "-n", "hw.model"]).strip(),
+                _out(["/usr/sbin/sysctl", "-n", "machdep.cpu.brand_string"]).strip()]
+        return hashlib.sha256("|".join(vals).encode()).hexdigest()[:32]
     import winreg
     vals = []
     for sub, name in ((r"SOFTWARE\Microsoft\Cryptography", "MachineGuid"), (r"HARDWARE\DESCRIPTION\System\BIOS", "BaseBoardManufacturer"),
@@ -159,7 +179,7 @@ class NeedEula(Refused):
 
 
 def http(url, payload=None, token=None, timeout=60):
-    headers = {"User-Agent": UA, "Content-Type": "application/json", "X-Click-Machine": machine_id()}
+    headers = {"User-Agent": UA, "Content-Type": "application/json", "X-Click-Machine": machine_id(), "X-Click-OS": OS}
     if token:
         headers["Authorization"] = "Bearer " + token
     req = urllib.request.Request(url, data=json.dumps(payload).encode() if payload is not None else None, headers=headers)
@@ -201,6 +221,33 @@ def key_path():
     return os.path.join(DATA, "key.dat")
 
 
+KEYCHAIN = "CLICK Video"
+
+
+def read_secret(path):
+    """What keep_key stored: DPAPI on Windows; on the Mac the login Keychain (the file only says where), else the file itself."""
+    if not MAC:
+        return _dpapi(open(path, "rb").read(), False).decode()
+    mark = open(path, encoding="utf-8").read()
+    if mark.startswith("plain:"):
+        return mark[6:]
+    r = subprocess.run(["/usr/bin/security", "find-generic-password", "-a", os.path.basename(path), "-s", KEYCHAIN, "-w"], capture_output=True, text=True)
+    if r.returncode:
+        raise OSError("Keychain")
+    return r.stdout.strip()
+
+
+def write_secret(path, text):
+    if not MAC:
+        with open(path, "wb") as f:
+            f.write(_dpapi(text.encode(), True))
+        return
+    r = subprocess.run(["/usr/bin/security", "add-generic-password", "-U", "-a", os.path.basename(path), "-s", KEYCHAIN, "-w", text], capture_output=True)
+    with open(path, "w", encoding="utf-8") as f:
+        f.write("keychain" if r.returncode == 0 else "plain:" + text)
+    os.chmod(path, 0o600)
+
+
 def given_key():
     """The key: the plugin's settings (Claude Code), CLICK_LICENSE_KEY, or the one entered with kich_hoat. An option left
     empty may arrive as the raw "${user_config.license_key}": that is no key."""
@@ -209,14 +256,13 @@ def given_key():
         if v and not v.startswith("${"):
             return v.upper()
     try:
-        return _dpapi(open(key_path(), "rb").read(), False).decode().strip().upper()
+        return read_secret(key_path()).strip().upper()
     except (OSError, UnicodeDecodeError):
         return ""
 
 
 def keep_key(key):
-    with open(key_path(), "wb") as f:
-        f.write(_dpapi(key.encode(), True))
+    write_secret(key_path(), key)
 
 
 KEY_FORM = re.compile(r"^CLK-[A-Z2-9]{5}-[A-Z2-9]{5}-[A-Z2-9]{5}-[A-Z2-9]{5}$")
@@ -226,7 +272,7 @@ def activate(key=None):
     key = (key or given_key()).strip().upper()
     if not key:
         raise NoKey("Chưa có key bản quyền. Hỏi người dùng key (dạng CLK-XXXXX-XXXXX-XXXXX-XXXXX) rồi gọi kich_hoat.")
-    tok = json.loads(http(SERVER + "/v1/activate", {"key": key, "mid": machine_id(), "ver": UA, "host": os.environ.get("COMPUTERNAME", "")}))["token"]
+    tok = json.loads(http(SERVER + "/v1/activate", {"key": key, "mid": machine_id(), "ver": UA, "host": os.environ.get("COMPUTERNAME") or __import__("socket").gethostname()}))["token"]
     with open(token_path(), "w", encoding="utf-8") as f:
         f.write(tok)
     os.environ["CLICK_LICENSE"] = key  # the engine renews with it later (same process)
@@ -337,8 +383,27 @@ def note_runtime():
         json.dump(done, open(p, "w", encoding="utf-8"))
 
 
+PENDING = os.path.join(DATA, "ban-moi.json")   # a newer version waiting for the customer's yes (read by the engine and the Brief form)
+REFRESH_FLAG = os.path.join(DATA, "cap-nhat.flag")  # a new engine is in: its pack (app/) is refreshed by cai_dat at the next start
+
+
+def set_pending(info):
+    if info:
+        json.dump(info, open(PENDING, "w", encoding="utf-8"), ensure_ascii=False)
+    elif os.path.exists(PENDING):
+        os.remove(PENDING)
+
+
+def pending():
+    try:
+        return json.load(open(PENDING, encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+
+
 def prepare():
-    """The engine module, up to date when the server can be reached, else the one already installed."""
+    """The engine module: the installed one; a newer one on the server is only noted (ban-moi.json) and installed when the
+    customer agrees (tool cap_nhat), unless the server marks it mandatory. First start: the server's one."""
     os.makedirs(ENGINES, exist_ok=True)
     note_runtime()
     try:
@@ -349,9 +414,14 @@ def prepare():
         except RuntimeError as e:
             log(e)
         install_wheels(m)
-        if not cur or cur["version"] != m["version"]:
+        if not cur or (cur["version"] != m["version"] and m.get("bat_buoc")):
             log("bộ máy mới", m["version"], "(đang có", cur and cur["version"], ")")
             install_engine(m)
+            set_pending(None)
+        elif cur["version"] != m["version"]:  # never switched under a customer's running project (user 11/11): told, applied on their yes
+            set_pending({"phien_ban": m["version"], "dang_dung": cur["version"], "ghi_chu": m.get("ghi_chu", ""), "luc": time.strftime("%d/%m/%Y")})
+        else:
+            set_pending(None)
     except (OSError, urllib.error.URLError) as e:  # offline: the installed engine checks its own licence (7 days)
         log("không kết nối được máy chủ:", e)
     m = installed()
@@ -431,6 +501,57 @@ class Mcp:
         self.state, self.error = "chưa đồng ý thoả thuận", "Người dùng chưa đồng ý. Gọi xem_thoa_thuan để xem lại."
         return False
 
+    def setup_form(self):
+        """First start, no key yet: ONE box asks for the key, the folders and the consent to the agreement (user 11/11: no
+        separate boxes). Only where the AI client has a confirmation box (MCP elicitation, Claude Code); elsewhere (Codex)
+        the AI asks in the chat with kich_hoat and the agreement tools, as before. Returns True when activated and agreed."""
+        self.initialized.wait(60)
+        if "elicitation" not in self.client_caps:
+            return False
+        try:
+            e = json.loads(http(SERVER + "/v1/eula/public"))
+        except (Refused, OSError, ValueError) as ex:
+            log("không lấy được thoả thuận:", ex)
+            return False
+        note = ""
+        for _ in range(3):
+            msg = (f"{note}CLICK Video: kích hoạt trên máy này.\n\n{e.get('notice_vi', '')}\n\n"
+                   f"Thoả thuận cấp phép phiên bản {e.get('version')}: toàn văn ở {LICENSE_FILE}\n{e.get('short_en', '')}")
+            r = self.ask_client("elicitation/create", {"message": msg, "requestedSchema": {"type": "object", "properties": {
+                "key": {"type": "string", "title": "Key bản quyền", "description": "Dạng CLK-XXXXX-XXXXX-XXXXX-XXXXX, nhận khi mua."},
+                "thu_muc_du_an": {"type": "string", "title": "Thư mục lưu dự án (tuỳ chọn)",
+                                  "description": "Đường dẫn đầy đủ. Để trống: thư mục bạn đang mở trợ lý AI."},
+                "thu_muc_ban_nhap_capcut": {"type": "string", "title": "Thư mục bản nháp CapCut (tuỳ chọn)",
+                                            "description": "Để trống: đúng thư mục bạn đã chọn trong CapCut."},
+                "dong_y": {"type": "boolean", "title": f"Tôi đã đọc và đồng ý Thoả thuận cấp phép phiên bản {e.get('version')} / I accept the Licence Agreement",
+                           "default": False}}, "required": ["key", "dong_y"]}})
+            if r.get("action") != "accept":
+                return False
+            c = r.get("content") or {}
+            key = str(c.get("key", "")).strip().upper()
+            if not KEY_FORM.match(key):
+                note = "Key chưa đúng dạng CLK-XXXXX-XXXXX-XXXXX-XXXXX. Nhập lại.\n\n"
+                continue
+            if c.get("dong_y") is not True:
+                note = "Cần đánh dấu đồng ý Thoả thuận cấp phép để dùng.\n\n"
+                continue
+            try:
+                activate(key)
+            except Refused as ex:
+                note = f"Máy chủ không nhận key: {ex}\n\n"
+                continue
+            keep_key(key)
+            eula_accept(e["version"], "form")
+            folders = {k: str(c.get(f, "")).strip() for k, f in (("lam_viec", "thu_muc_du_an"), ("ban_nhap", "thu_muc_ban_nhap_capcut"))}
+            folders = {k: v for k, v in folders.items() if v and os.path.isabs(v)}
+            if folders:  # the engine reads them from settings.json (config.settings, same as its chon_thu_muc tool)
+                p = os.path.join(DATA, "settings.json")
+                cur = json.load(open(p, encoding="utf-8")) if os.path.exists(p) else {}
+                json.dump({**cur, **folders}, open(p, "w", encoding="utf-8"), ensure_ascii=False, indent=1)
+            log("đã kích hoạt và đồng ý qua một hộp hỏi")
+            return True
+        return False
+
     def send(self, msg):
         with self.lock:
             self.out.write(json.dumps(msg, ensure_ascii=False).encode() + b"\n")
@@ -445,6 +566,13 @@ class Mcp:
                     return  # waits for dong_y_thoa_thuan
                 self.engine, self.version = prepare()
             except NoKey as e:
+                self.state = "chờ người dùng nhập key"
+                if self.setup_form():
+                    self.engine, self.version = prepare()
+                    self.eula, self.state, self.error = None, "sẵn sàng", ""
+                    if self.ready:
+                        self.send({"jsonrpc": "2.0", "method": "notifications/tools/list_changed"})
+                    return
                 self.need_key, self.state, self.error = True, "cần key bản quyền", str(e)
                 if self.ready:
                     self.send({"jsonrpc": "2.0", "method": "notifications/tools/list_changed"})
@@ -456,9 +584,31 @@ class Mcp:
             self.state, self.error = "lỗi", str(e)
             log("lỗi chuẩn bị:", traceback.format_exc())
 
+    UPDATE_TOOL = {"name": "cap_nhat", "description": "Có bản CLICK Video mới (xem trang_thai › ban_moi). Báo khách ngay khi thấy, kèm lời khuyên: "
+                   "làm xong dự án đang dở rồi hãy cập nhật, dự án đã làm vẫn giữ nguyên. CHỈ gọi khi chính khách đồng ý cập nhật; không tự gọi. "
+                   "Từ chối khi đang có việc dựng chạy. Sau khi gọi: dặn khách mở phiên mới, ở phiên mới gọi cai_dat để cập nhật phần dựng.",
+                   "inputSchema": {"type": "object", "properties": {}}}
+
+    def update_now(self):
+        try:
+            from click_engine import runner
+            if any(j.get("state") == "running" for j in runner.JOBS.values()):
+                return "Đang có việc dựng chạy: chờ xong rồi mới cập nhật.", True
+        except Exception:  # noqa: BLE001
+            pass
+        m = manifest()  # a fresh, signed manifest and download link
+        install_wheels(m)
+        install_engine(m)
+        set_pending(None)
+        open(REFRESH_FLAG, "w").close()
+        log("khách đồng ý cập nhật lên", m["version"])
+        return (f"Đã tải bản {m['version']}. Để dùng: đóng phiên này và mở phiên mới của trợ lý AI. Ở phiên mới, trợ lý cài nốt phần dựng "
+                "(vài phút, có báo tiến độ). Dự án và thư viện của khách giữ nguyên."), False
+
     def tools(self):
         if self.engine:
-            return [{"name": n, "description": d, "inputSchema": s} for n, _, d, s in self.engine.TOOLS]
+            out = [{"name": n, "description": d, "inputSchema": s} for n, _, d, s in self.engine.TOOLS]
+            return out + ([self.UPDATE_TOOL] if pending() else [])
         out = [{"name": "trang_thai", "description": "Tình trạng của plugin: đang tải bộ máy, cần đồng ý thoả thuận, lỗi giấy phép hay đã sẵn sàng. Gọi đầu tiên mỗi phiên.",
                 "inputSchema": {"type": "object", "properties": {}}}]
         if self.need_key:
@@ -474,10 +624,15 @@ class Mcp:
         return out
 
     def call(self, name, args):
+        if self.engine and name == "cap_nhat" and pending():
+            return self.update_now()
         if self.engine:
             fn = next((f for n, f, _, _ in self.engine.TOOLS if n == name), None)
             if fn:
                 r = fn(**(args or {}))
+                if name == "trang_thai" and isinstance(r, dict) and pending():
+                    r["ban_moi"] = {**pending(), "huong_dan": "Báo khách có bản mới; khuyên làm xong dự án đang dở rồi mới cập nhật. "
+                                    "Khách đồng ý thì gọi cap_nhat."}
                 return r if isinstance(r, str) else json.dumps(r, ensure_ascii=False), False
         if name == "kich_hoat" and self.need_key:
             key = str((args or {}).get("key", "")).strip().upper()
@@ -565,14 +720,14 @@ class Mcp:
 
 
 def drop_old_runtime():
-    """start.cmd swapped in the Python copied to the customer's other drive; the old one goes (in the background)."""
+    """start.cmd / start.sh swapped in the Python copied to the customer's other drive; the old one goes (in the background)."""
     old = os.path.join(DATA, "runtime.old")
     if not os.path.lexists(old):
         return
     try:
-        if os.path.isjunction(old):  # it already lived on another drive: delete that copy, then the link
+        if os.path.islink(old) or (not MAC and os.path.isjunction(old)):  # it already lived on another drive: delete that copy, then the link
             target = os.path.realpath(old)
-            os.rmdir(old)
+            os.remove(old) if MAC else os.rmdir(old)
             shutil.rmtree(target, ignore_errors=True)
         else:
             shutil.rmtree(old, ignore_errors=True)

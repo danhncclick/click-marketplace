@@ -1,37 +1,19 @@
 {
   "name": "click-video",
   "displayName": "CLICK Video",
-  "version": "0.4.1",
+  "version": "0.4.2",
   "description": "Dựng video TikTok 9:16 tự động từ video quay, file giọng hoặc nội dung ảnh cuộn, theo brief và thương hiệu từng khách. © 2026 Nguyễn Bá Duy, phân phối bởi CLICK Media.",
-  "author": {"name": "Nguyễn Bá Duy (chủ sở hữu); phân phối: CLICK Media", "url": "https://congty.click"},
+  "author": {
+    "name": "Nguyễn Bá Duy (chủ sở hữu); phân phối: CLICK Media",
+    "url": "https://congty.click"
+  },
   "homepage": "https://congty.click",
   "license": "LicenseRef-CLICK-Proprietary",
-  "keywords": ["video", "tiktok", "capcut", "edit", "vietnamese"],
-  "userConfig": {
-    "license_key": {
-      "type": "string",
-      "title": "Key bản quyền",
-      "description": "Key dạng CLK-XXXXX-XXXXX-XXXXX-XXXXX nhận khi mua. Mỗi key dùng trên số máy theo gói. Để trống cũng được: lần đầu nhắn \"dựng video\", trợ lý sẽ hỏi key ngay trong khung chat.",
-      "required": false,
-      "sensitive": true
-    },
-    "work_folder": {
-      "type": "directory",
-      "title": "Thư mục làm việc (tuỳ chọn)",
-      "description": "Nơi lưu dự án và thư viện khách hàng. Để trống: thư mục bạn mở Claude Code.",
-      "required": false
-    },
-    "drafts_folder": {
-      "type": "directory",
-      "title": "Thư mục bản nháp CapCut (tuỳ chọn)",
-      "description": "Để trống: lấy đúng thư mục bạn đã chọn trong CapCut (Cài đặt › Bản nháp), không có thì dùng mặc định của CapCut.",
-      "required": false
-    },
-    "music_folder": {
-      "type": "directory",
-      "title": "Thư mục nhạc của bạn (tuỳ chọn)",
-      "description": "Để trống: work/_nhac trong thư mục làm việc.",
-      "required": false
-    }
-  }
+  "keywords": [
+    "video",
+    "tiktok",
+    "capcut",
+    "edit",
+    "vietnamese"
+  ]
 }
