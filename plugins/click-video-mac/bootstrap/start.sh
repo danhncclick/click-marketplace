@@ -5,6 +5,8 @@
 # fetches the engine for a valid key.
 # Nothing may be printed on stdout: it is the channel to the AI client. Messages go to stderr.
 set -u
+POINTER="$HOME/Library/Application Support/ClickVideo/plugin-data.txt"  # written by bootstrap.py: for click-engine run in a terminal
+if [ -z "${CLAUDE_PLUGIN_DATA:-}${PLUGIN_DATA:-}" ] && [ -f "$POINTER" ]; then CLAUDE_PLUGIN_DATA="$(cat "$POINTER")"; export CLAUDE_PLUGIN_DATA; fi
 D="${CLAUDE_PLUGIN_DATA:-${PLUGIN_DATA:-$HOME/Library/Application Support/ClickVideo}}"
 case "$D" in '${'*) D="$HOME/Library/Application Support/ClickVideo" ;; esac
 HERE="$(cd "$(dirname "$0")" && pwd)"
