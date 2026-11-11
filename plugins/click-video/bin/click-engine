@@ -1,0 +1,4 @@
+#!/bin/sh
+# click-engine wait | status | activate KEY — for Git Bash: hands over to click-engine.cmd
+here="$(cd "$(dirname "$0")" && pwd -W 2>/dev/null || cd "$(dirname "$0")" && pwd)"
+exec cmd //d //c "$here\\click-engine.cmd" "$@"
