@@ -383,8 +383,27 @@ def note_runtime():
         json.dump(done, open(p, "w", encoding="utf-8"))
 
 
+PENDING = os.path.join(DATA, "ban-moi.json")   # a newer version waiting for the customer's yes (read by the engine and the Brief form)
+REFRESH_FLAG = os.path.join(DATA, "cap-nhat.flag")  # a new engine is in: its pack (app/) is refreshed by cai_dat at the next start
+
+
+def set_pending(info):
+    if info:
+        json.dump(info, open(PENDING, "w", encoding="utf-8"), ensure_ascii=False)
+    elif os.path.exists(PENDING):
+        os.remove(PENDING)
+
+
+def pending():
+    try:
+        return json.load(open(PENDING, encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+
+
 def prepare():
-    """The engine module, up to date when the server can be reached, else the one already installed."""
+    """The engine module: the installed one; a newer one on the server is only noted (ban-moi.json) and installed when the
+    customer agrees (tool cap_nhat), unless the server marks it mandatory. First start: the server's one."""
     os.makedirs(ENGINES, exist_ok=True)
     note_runtime()
     try:
@@ -395,9 +414,14 @@ def prepare():
         except RuntimeError as e:
             log(e)
         install_wheels(m)
-        if not cur or cur["version"] != m["version"]:
+        if not cur or (cur["version"] != m["version"] and m.get("bat_buoc")):
             log("bộ máy mới", m["version"], "(đang có", cur and cur["version"], ")")
             install_engine(m)
+            set_pending(None)
+        elif cur["version"] != m["version"]:  # never switched under a customer's running project (user 11/11): told, applied on their yes
+            set_pending({"phien_ban": m["version"], "dang_dung": cur["version"], "ghi_chu": m.get("ghi_chu", ""), "luc": time.strftime("%d/%m/%Y")})
+        else:
+            set_pending(None)
     except (OSError, urllib.error.URLError) as e:  # offline: the installed engine checks its own licence (7 days)
         log("không kết nối được máy chủ:", e)
     m = installed()
@@ -477,6 +501,57 @@ class Mcp:
         self.state, self.error = "chưa đồng ý thoả thuận", "Người dùng chưa đồng ý. Gọi xem_thoa_thuan để xem lại."
         return False
 
+    def setup_form(self):
+        """First start, no key yet: ONE box asks for the key, the folders and the consent to the agreement (user 11/11: no
+        separate boxes). Only where the AI client has a confirmation box (MCP elicitation, Claude Code); elsewhere (Codex)
+        the AI asks in the chat with kich_hoat and the agreement tools, as before. Returns True when activated and agreed."""
+        self.initialized.wait(60)
+        if "elicitation" not in self.client_caps:
+            return False
+        try:
+            e = json.loads(http(SERVER + "/v1/eula/public"))
+        except (Refused, OSError, ValueError) as ex:
+            log("không lấy được thoả thuận:", ex)
+            return False
+        note = ""
+        for _ in range(3):
+            msg = (f"{note}CLICK Video: kích hoạt trên máy này.\n\n{e.get('notice_vi', '')}\n\n"
+                   f"Thoả thuận cấp phép phiên bản {e.get('version')}: toàn văn ở {LICENSE_FILE}\n{e.get('short_en', '')}")
+            r = self.ask_client("elicitation/create", {"message": msg, "requestedSchema": {"type": "object", "properties": {
+                "key": {"type": "string", "title": "Key bản quyền", "description": "Dạng CLK-XXXXX-XXXXX-XXXXX-XXXXX, nhận khi mua."},
+                "thu_muc_du_an": {"type": "string", "title": "Thư mục lưu dự án (tuỳ chọn)",
+                                  "description": "Đường dẫn đầy đủ. Để trống: thư mục bạn đang mở trợ lý AI."},
+                "thu_muc_ban_nhap_capcut": {"type": "string", "title": "Thư mục bản nháp CapCut (tuỳ chọn)",
+                                            "description": "Để trống: đúng thư mục bạn đã chọn trong CapCut."},
+                "dong_y": {"type": "boolean", "title": f"Tôi đã đọc và đồng ý Thoả thuận cấp phép phiên bản {e.get('version')} / I accept the Licence Agreement",
+                           "default": False}}, "required": ["key", "dong_y"]}})
+            if r.get("action") != "accept":
+                return False
+            c = r.get("content") or {}
+            key = str(c.get("key", "")).strip().upper()
+            if not KEY_FORM.match(key):
+                note = "Key chưa đúng dạng CLK-XXXXX-XXXXX-XXXXX-XXXXX. Nhập lại.\n\n"
+                continue
+            if c.get("dong_y") is not True:
+                note = "Cần đánh dấu đồng ý Thoả thuận cấp phép để dùng.\n\n"
+                continue
+            try:
+                activate(key)
+            except Refused as ex:
+                note = f"Máy chủ không nhận key: {ex}\n\n"
+                continue
+            keep_key(key)
+            eula_accept(e["version"], "form")
+            folders = {k: str(c.get(f, "")).strip() for k, f in (("lam_viec", "thu_muc_du_an"), ("ban_nhap", "thu_muc_ban_nhap_capcut"))}
+            folders = {k: v for k, v in folders.items() if v and os.path.isabs(v)}
+            if folders:  # the engine reads them from settings.json (config.settings, same as its chon_thu_muc tool)
+                p = os.path.join(DATA, "settings.json")
+                cur = json.load(open(p, encoding="utf-8")) if os.path.exists(p) else {}
+                json.dump({**cur, **folders}, open(p, "w", encoding="utf-8"), ensure_ascii=False, indent=1)
+            log("đã kích hoạt và đồng ý qua một hộp hỏi")
+            return True
+        return False
+
     def send(self, msg):
         with self.lock:
             self.out.write(json.dumps(msg, ensure_ascii=False).encode() + b"\n")
@@ -491,6 +566,13 @@ class Mcp:
                     return  # waits for dong_y_thoa_thuan
                 self.engine, self.version = prepare()
             except NoKey as e:
+                self.state = "chờ người dùng nhập key"
+                if self.setup_form():
+                    self.engine, self.version = prepare()
+                    self.eula, self.state, self.error = None, "sẵn sàng", ""
+                    if self.ready:
+                        self.send({"jsonrpc": "2.0", "method": "notifications/tools/list_changed"})
+                    return
                 self.need_key, self.state, self.error = True, "cần key bản quyền", str(e)
                 if self.ready:
                     self.send({"jsonrpc": "2.0", "method": "notifications/tools/list_changed"})
@@ -502,9 +584,31 @@ class Mcp:
             self.state, self.error = "lỗi", str(e)
             log("lỗi chuẩn bị:", traceback.format_exc())
 
+    UPDATE_TOOL = {"name": "cap_nhat", "description": "Có bản CLICK Video mới (xem trang_thai › ban_moi). Báo khách ngay khi thấy, kèm lời khuyên: "
+                   "làm xong dự án đang dở rồi hãy cập nhật, dự án đã làm vẫn giữ nguyên. CHỈ gọi khi chính khách đồng ý cập nhật; không tự gọi. "
+                   "Từ chối khi đang có việc dựng chạy. Sau khi gọi: dặn khách mở phiên mới, ở phiên mới gọi cai_dat để cập nhật phần dựng.",
+                   "inputSchema": {"type": "object", "properties": {}}}
+
+    def update_now(self):
+        try:
+            from click_engine import runner
+            if any(j.get("state") == "running" for j in runner.JOBS.values()):
+                return "Đang có việc dựng chạy: chờ xong rồi mới cập nhật.", True
+        except Exception:  # noqa: BLE001
+            pass
+        m = manifest()  # a fresh, signed manifest and download link
+        install_wheels(m)
+        install_engine(m)
+        set_pending(None)
+        open(REFRESH_FLAG, "w").close()
+        log("khách đồng ý cập nhật lên", m["version"])
+        return (f"Đã tải bản {m['version']}. Để dùng: đóng phiên này và mở phiên mới của trợ lý AI. Ở phiên mới, trợ lý cài nốt phần dựng "
+                "(vài phút, có báo tiến độ). Dự án và thư viện của khách giữ nguyên."), False
+
     def tools(self):
         if self.engine:
-            return [{"name": n, "description": d, "inputSchema": s} for n, _, d, s in self.engine.TOOLS]
+            out = [{"name": n, "description": d, "inputSchema": s} for n, _, d, s in self.engine.TOOLS]
+            return out + ([self.UPDATE_TOOL] if pending() else [])
         out = [{"name": "trang_thai", "description": "Tình trạng của plugin: đang tải bộ máy, cần đồng ý thoả thuận, lỗi giấy phép hay đã sẵn sàng. Gọi đầu tiên mỗi phiên.",
                 "inputSchema": {"type": "object", "properties": {}}}]
         if self.need_key:
@@ -520,10 +624,15 @@ class Mcp:
         return out
 
     def call(self, name, args):
+        if self.engine and name == "cap_nhat" and pending():
+            return self.update_now()
         if self.engine:
             fn = next((f for n, f, _, _ in self.engine.TOOLS if n == name), None)
             if fn:
                 r = fn(**(args or {}))
+                if name == "trang_thai" and isinstance(r, dict) and pending():
+                    r["ban_moi"] = {**pending(), "huong_dan": "Báo khách có bản mới; khuyên làm xong dự án đang dở rồi mới cập nhật. "
+                                    "Khách đồng ý thì gọi cap_nhat."}
                 return r if isinstance(r, str) else json.dumps(r, ensure_ascii=False), False
         if name == "kich_hoat" and self.need_key:
             key = str((args or {}).get("key", "")).strip().upper()
