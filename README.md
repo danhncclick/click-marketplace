@@ -6,6 +6,20 @@
 
 Plugin dựng video TikTok cho trợ lý AI (Claude Code, Codex). Cần key bản quyền.
 
+## Cần có trước: Git
+
+Claude Code và Codex cần **Git** để tải plugin (thiếu Git thì báo "Cần có Git để thêm marketplace"). Cài một lần:
+
+- Windows: mở PowerShell, dán lệnh dưới (cài bản chính thức, im lặng, 1–2 phút). Windows hỏi quyền thì bấm Có. Máy chưa có winget: tải ở https://git-scm.com/download/win, bấm Next đến hết.
+
+```
+winget install --id Git.Git -e --source winget --silent --accept-package-agreements --accept-source-agreements
+```
+
+- Mac: mở Terminal, chạy `xcode-select --install` rồi bấm Cài đặt.
+
+Cài xong, **thoát hẳn** Claude hoặc Codex (cả biểu tượng dưới khay đồng hồ) rồi mở lại.
+
 ## Cài cho Claude Code
 
 ```
