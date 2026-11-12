@@ -1,5 +1,5 @@
 @echo off
-rem CLICK Video: starts the plugin with the official Python from python.org. Plain text, nothing compiled: read it.
+rem NBD Video: starts the plugin with the official Python from python.org. Plain text, nothing compiled: read it.
 rem First run: download Python's embeddable package, check its SHA-256 (published by python.org), unpack it.
 rem Every run: start bootstrap.py (also plain text), which speaks MCP to Claude Code and fetches the engine for a valid key.
 rem Nothing may be printed on stdout: it is the channel to Claude Code. Messages go to stderr.

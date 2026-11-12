@@ -1,4 +1,4 @@
-# CLICK Video
+# NBD Video
 
 © 2026 Nguyễn Bá Duy. Bảo lưu mọi quyền. Nghiêm cấm sao chép, phân phối, dịch ngược.
 
@@ -22,7 +22,7 @@ codex plugin marketplace add danhncclick/click-marketplace
 codex plugin add click-video@click-media
 ```
 
-(Hoặc mở `codex`, gõ `/plugins`, chọn CLICK Video và cài.)
+(Hoặc mở `codex`, gõ `/plugins`, chọn NBD Video và cài.)
 
 Codex hỏi cho phép mỗi lần plugin dùng một công cụ. Muốn khỏi hỏi, thêm vào `~/.codex/config.toml`:
 

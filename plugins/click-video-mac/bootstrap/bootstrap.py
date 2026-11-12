@@ -1,4 +1,4 @@
-"""CLICK Video bootstrap: plain text on purpose, so anyone can read what runs on their computer (user 10/11).
+"""NBD Video bootstrap: plain text on purpose, so anyone can read what runs on their computer (user 10/11).
 
 What it does, in order:
 1. Speaks MCP (JSON-RPC over stdin/stdout) to the AI client (Claude Code, Codex), with the Python standard library only.
@@ -554,7 +554,7 @@ class Mcp:
             return False
         note = ""
         for _ in range(3):
-            msg = (f"{note}CLICK Video: kích hoạt trên máy này.\n\n{e.get('notice_vi', '')}\n\n"
+            msg = (f"{note}NBD Video: kích hoạt trên máy này.\n\n{e.get('notice_vi', '')}\n\n"
                    f"Thoả thuận cấp phép phiên bản {e.get('version')}: toàn văn ở {LICENSE_FILE}\n{e.get('short_en', '')}")
             r = self.ask_client("elicitation/create", {"message": msg, "requestedSchema": {"type": "object", "properties": {
                 "key": {"type": "string", "title": "Key bản quyền", "description": "Dạng CLK-XXXXX-XXXXX-XXXXX-XXXXX, nhận khi mua."},
@@ -623,7 +623,7 @@ class Mcp:
             self.state, self.error = "lỗi", str(e)
             log("lỗi chuẩn bị:", traceback.format_exc())
 
-    UPDATE_TOOL = {"name": "cap_nhat", "description": "Có bản CLICK Video mới (xem trang_thai › ban_moi). Báo khách ngay khi thấy, kèm lời khuyên: "
+    UPDATE_TOOL = {"name": "cap_nhat", "description": "Có bản NBD Video mới (xem trang_thai › ban_moi). Báo khách ngay khi thấy, kèm lời khuyên: "
                    "làm xong dự án đang dở rồi hãy cập nhật, dự án đã làm vẫn giữ nguyên. CHỈ gọi khi chính khách đồng ý cập nhật; không tự gọi. "
                    "Từ chối khi đang có việc dựng chạy. Sau khi gọi: dặn khách mở phiên mới, ở phiên mới gọi cai_dat để cập nhật phần dựng.",
                    "inputSchema": {"type": "object", "properties": {}}}

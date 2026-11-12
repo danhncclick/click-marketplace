@@ -1,9 +1,9 @@
 ---
 name: dung-video
-description: Dựng video TikTok bằng bộ máy CLICK Video (video quay có người nói, video không lộ mặt từ file giọng, bộ ảnh cuộn), từ form Brief đến file MP4 hoặc bản nháp CapCut. Dùng khi người dùng muốn dựng, edit, làm video, mở Brief hoặc làm tiếp một dự án video.
+description: Dựng video TikTok bằng bộ máy NBD Video (video quay có người nói, video không lộ mặt từ file giọng, bộ ảnh cuộn), từ form Brief đến file MP4 hoặc bản nháp CapCut. Dùng khi người dùng muốn dựng, edit, làm video, mở Brief hoặc làm tiếp một dự án video.
 ---
 
-# CLICK Video
+# NBD Video
 
 Trả lời người dùng bằng tiếng Việt. Mọi việc đi qua các tool MCP của `click-video`; quy tắc dựng không nằm trong file này mà lấy từ máy chủ theo từng bước.
 

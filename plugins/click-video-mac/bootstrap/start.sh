@@ -1,5 +1,5 @@
 #!/bin/sh
-# CLICK Video for macOS (Apple Silicon): starts the plugin with an official standalone Python build. Plain text, nothing compiled: read it.
+# NBD Video for macOS (Apple Silicon): starts the plugin with an official standalone Python build. Plain text, nothing compiled: read it.
 # First run: download Python (python-build-standalone, the build uv uses), check its SHA-256, unpack it next to the plugin's data.
 # Every run: start bootstrap.py (also plain text, the same file as on Windows), which speaks MCP to Claude Code or Codex and
 # fetches the engine for a valid key.

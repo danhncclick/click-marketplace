@@ -6,7 +6,7 @@ Phiên bản 1.0, ngày [điền ngày phát hành]
 
 ## Các bên
 
-**Bên cấp phép:** Ông **Nguyễn Bá Duy**, chủ sở hữu quyền tác giả của phần mềm CLICK Video.
+**Bên cấp phép:** Ông **Nguyễn Bá Duy**, chủ sở hữu quyền tác giả của phần mềm NBD Video.
 - Địa chỉ: [điền]
 - Email liên hệ: [điền]
 - Đơn vị phân phối được uỷ quyền: [điền tên đơn vị phân phối, nếu có]
@@ -17,7 +17,7 @@ Khách hàng đồng ý với Thoả thuận này khi bấm **"Tôi đồng ý"*
 
 ## Điều 1. Định nghĩa
 
-1. **"Phần mềm"** là CLICK Video. Phần mềm gồm:
+1. **"Phần mềm"** là NBD Video. Phần mềm gồm:
    - plugin cho trợ lý AI và bộ khởi động;
    - module chương trình đã biên dịch;
    - giao diện Brief;
@@ -127,7 +127,7 @@ This is an English translation of the Vietnamese `THOA-THUAN-CAP-PHEP.md`. Where
 
 ## Parties
 
-**Licensor:** **Nguyễn Bá Duy**, owner of the copyright in the CLICK Video software.
+**Licensor:** **Nguyễn Bá Duy**, owner of the copyright in the NBD Video software.
 - Address: [fill in]
 - Contact email: [fill in]
 - Authorised distributor: [fill in, if any]
@@ -142,7 +142,7 @@ If the Customer does not agree, it must not install or use the Software.
 
 ## 1. Definitions
 
-1. **"Software"** means CLICK Video. It includes:
+1. **"Software"** means NBD Video. It includes:
    - the AI assistant plugin and its bootstrap;
    - the compiled program modules;
    - the Brief interface;
