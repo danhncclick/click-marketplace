@@ -1,3 +1,0 @@
-#!/bin/sh
-# click-engine wait | status | activate KEY - runs through the plugin's readable bootstrap
-exec /bin/sh "$(cd "$(dirname "$0")/.." && pwd)/bootstrap/start.sh" cli "$@"

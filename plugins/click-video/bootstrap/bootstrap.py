@@ -439,6 +439,20 @@ def pending():
         return None
 
 
+def watch_updates(every=86400):
+    """While the plugin runs, look for a newer version once a day (user 12/11, besides the check at every start: a customer who keeps one chat open never
+    started a new one, so the check at start never ran and the Brief form showed nothing). Only noted, never installed here."""
+    while True:
+        time.sleep(every)
+        try:
+            m = manifest()
+            cur = json.load(open(os.path.join(ENGINES, "current.json"), encoding="utf-8"))["version"]
+            if cur != m["version"]:
+                set_pending({"phien_ban": m["version"], "dang_dung": cur, "ghi_chu": m.get("ghi_chu", ""), "luc": time.strftime("%d/%m/%Y")})
+        except Exception as e:  # noqa: BLE001  (offline or a bad answer: try again next time)
+            log("kiểm tra bản mới:", e)
+
+
 def prepare():
     """The engine module: the installed one; a newer one on the server is only noted (ban-moi.json) and installed when the
     customer agrees (tool cap_nhat), unless the server marks it mandatory. First start: the server's one."""
@@ -741,6 +755,7 @@ class Mcp:
 
     def run(self):
         threading.Thread(target=self.load, daemon=True).start()
+        threading.Thread(target=watch_updates, daemon=True).start()
         for raw in sys.stdin.buffer:
             raw = raw.strip()
             if not raw:

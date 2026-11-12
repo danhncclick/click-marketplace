@@ -2,73 +2,78 @@
 
 © 2026 Nguyễn Bá Duy. Bảo lưu mọi quyền. Nghiêm cấm sao chép, phân phối, dịch ngược.
 
-© 2026 Nguyễn Bá Duy. All rights reserved. Copying, redistribution and reverse engineering are prohibited.
+Bản cho máy Windows. Máy Mac: xem `danhncclick/click-marketplace-mac`.
 
-Plugin dựng video TikTok cho trợ lý AI (Claude Code, Codex). Cần key bản quyền.
+## Cách cài
 
-## Cần có trước: Git
+### Bước 1. Cài Claude
 
-Claude Code và Codex cần **Git** để tải plugin (thiếu Git thì báo "Cần có Git để thêm marketplace"). Cài một lần:
+Tải ở https://claude.ai/download, cài, đăng nhập. Mở Claude, chọn tab **Code**.
 
-- Windows: mở PowerShell, dán lệnh dưới (cài bản chính thức, im lặng, 1–2 phút). Windows hỏi quyền thì bấm Có. Máy chưa có winget: tải ở https://git-scm.com/download/win, bấm Next đến hết.
+### Bước 2. Cài Git
 
-```
-winget install --id Git.Git -e --source winget --silent --accept-package-agreements --accept-source-agreements
-```
-
-- Mac: mở Terminal, chạy `xcode-select --install` rồi bấm Cài đặt.
-
-Cài xong, **thoát hẳn** Claude hoặc Codex (cả biểu tượng dưới khay đồng hồ) rồi mở lại.
-
-## Cài cho Claude Code
+Gửi cho Claude tin nhắn này:
 
 ```
-/plugin marketplace add danhncclick/click-marketplace
-/plugin install click-video@click-media
+Chạy lệnh này giúp tôi: winget install --id Git.Git -e --source winget --silent --accept-package-agreements --accept-source-agreements
 ```
 
-Nhập key vào ô Claude Code hỏi khi cài.
+Claude hỏi cho phép: bấm **Cho phép**. Windows hỏi quyền: bấm **Có**. Chờ Claude báo xong (1–2 phút). Máy đã có Git thì Claude sẽ báo, chuyển sang bước 3.
 
-## Cài cho Codex
+### Bước 3. Tắt hẳn Claude rồi mở lại
 
-```
-codex plugin marketplace add danhncclick/click-marketplace
-codex plugin add click-video@click-media
-```
+Nhìn góc phải dưới màn hình (cạnh đồng hồ), bấm mũi tên **^**, **chuột phải** biểu tượng Claude, chọn **Thoát** (Quit). Sau đó mở lại Claude, chọn tab **Code**.
 
-(Hoặc mở `codex`, gõ `/plugins`, chọn NBD Video và cài.)
+### Bước 4. Thêm NBD Video
 
-Codex hỏi cho phép mỗi lần plugin dùng một công cụ. Muốn khỏi hỏi, thêm vào `~/.codex/config.toml`:
-
-```toml
-[plugins."click-video@click-media".mcp_servers.click-video]
-default_tools_approval_mode = "approve"
-```
-
-Key: lần đầu nhắn "dựng video", trợ lý sẽ hỏi key, bạn dán key vào khung chat. Key được lưu mã hoá trên máy, chỉ hỏi một lần. Hoặc đặt sẵn biến môi trường `CLICK_LICENSE_KEY` trước khi mở Codex. Lần đầu dùng, trợ lý cho bạn xem Thoả thuận cấp phép và chờ bạn đồng ý.
-
-## Máy Mac (chip Apple M, macOS 13 trở lên)
-
-Cùng repo, plugin `click-video-mac`. Claude Code:
+Gửi cho Claude dòng này:
 
 ```
 /plugin marketplace add danhncclick/click-marketplace
-/plugin install click-video-mac@click-media
 ```
 
-Codex:
+- Hiện cửa sổ **Thêm marketplace**: bấm **Đồng bộ**.
+- Hiện danh sách: bấm dấu **+** ở **NBD Video**. Dấu + đổi thành bánh răng là xong.
+
+(Dùng Claude trong cửa sổ dòng lệnh: gõ thêm `/plugin install click-video@click-media`.)
+
+### Bước 5. Nhập key
+
+Bấm **Tạo mới**. Gửi tin nhắn này (thay bằng key của bạn):
 
 ```
-codex plugin marketplace add danhncclick/click-marketplace
-codex plugin add click-video-mac@click-media
+Cài NBD Video với key CLK-XXXXX-XXXXX-XXXXX-XXXXX rồi mở Brief cho tôi.
 ```
 
-Bỏ hỏi cho phép trong Codex: `[plugins."click-video-mac@click-media".mcp_servers.click-video]` với `default_tools_approval_mode = "approve"`. Bộ khởi động `plugins/click-video-mac/bootstrap/start.sh` tải Python chính thức (python-build-standalone) và kiểm mã SHA-256 trước khi chạy. Bản nháp CapCut trên Mac mặc định ở `~/Movies/CapCut`.
+- Claude hiện Thoả thuận: trả lời **đồng ý**.
+- Claude hỏi cho phép: bấm **Luôn cho phép**.
+- Chờ cài (10–30 phút). Xong, Claude gửi một đường dẫn: bấm vào để mở form Brief.
 
-## Dung lượng
+Xong. Lần sau chỉ cần mở Claude, tab **Code**, nhắn "Mở Brief cho tôi".
 
-Bản cài cần khoảng 7–12 GB. Ổ C ít chỗ thì nói với trợ lý một thư mục trên ổ khác (ví dụ `E:\ClickVideo`): trợ lý chuyển phần nặng sang đó, trước hoặc sau khi cài.
+## Cập nhật bản mới
 
-Toàn bộ repo là tệp chữ, đọc được: bộ khởi động `plugins/click-video/bootstrap/` tải Python chính thức từ python.org và chỉ tải bộ máy khi key hợp lệ.
+1. Khi có bản mới, trên form Brief hiện thanh vàng "Có bản NBD Video mới". Bấm **Cập nhật ngay**. (Không thấy thanh vàng: nhắn Claude "Cập nhật NBD Video".)
+2. Claude báo đã tải bản mới: trong Claude bấm **Tạo mới**, nhắn: Mở Brief cho tôi
+3. Chờ Claude cài nốt (vài phút, có báo tiến độ), rồi bấm đường dẫn Claude gửi để mở lại Brief. Dự án đang làm giữ nguyên.
+4. Mỗi tháng một lần, cập nhật luôn phần plugin: gửi cho Claude dòng /plugin marketplace update click-media
+
+## Tắt Claude thì sao
+
+- Tắt Claude, form Brief vẫn mở và sửa được bình thường, kể cả Đọc video & phân tích.
+- Bấm Dựng hoặc AI phân tích lúc Claude đang tắt: góc dưới hiện "AI chưa kết nối", yêu cầu nằm chờ, không mất.
+- Mở Claude, bấm **Tạo mới**, nhắn: Mở Brief cho tôi. AI tự làm tiếp yêu cầu đang chờ, không cần bấm lại.
+
+## Dùng Codex (ChatGPT) thay cho Claude
+
+Làm như trên, chỉ khác:
+
+- Bước 1: cài Codex của ChatGPT.
+- Bước 4: gõ trong cửa sổ lệnh `codex plugin marketplace add danhncclick/click-marketplace`, rồi `codex plugin add click-video@click-media`.
+- Bước 5: gõ `codex` để mở, rồi gửi tin nhắn có key.
+
+## Cần giúp
+
+Chụp màn hình chỗ bị lỗi, gửi cho bên bán.
 
 Thoả thuận cấp phép: [LICENSE.md](LICENSE.md). Thành phần bên thứ ba: [THANH-PHAN-BEN-THU-BA.md](THANH-PHAN-BEN-THU-BA.md).

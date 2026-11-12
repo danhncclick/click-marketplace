@@ -9,11 +9,6 @@
       "name": "click-video",
       "source": "./plugins/click-video",
       "description": "Dựng video talking-head, không lộ mặt và ảnh cuộn theo brief, xuất MP4 hoặc CapCut. Cần key bản quyền."
-    },
-    {
-      "name": "click-video-mac",
-      "source": "./plugins/click-video-mac",
-      "description": "Bản cho máy Mac chip Apple M (macOS 13 trở lên): dựng video talking-head, không lộ mặt và ảnh cuộn theo brief, xuất MP4 hoặc CapCut. Cần key bản quyền."
     }
   ]
 }

@@ -23,13 +23,16 @@ Trả lời người dùng bằng tiếng Việt. Mọi việc đi qua các tool
 
 ## Mỗi dự án
 1. `mo_brief` (thêm `du_an` để mở sẵn dự án) và đưa đường dẫn cho người dùng.
-2. Chạy nền lệnh `click-engine wait`: nó in ra một yêu cầu từ form (phân tích, dựng, sửa, hoàn thành) rồi thoát. Làm xong yêu cầu thì chạy lại lệnh đó.
+2. Chạy nền lệnh `click-engine wait`: nó in ra một yêu cầu từ form (phân tích, dựng, sửa, hoàn thành, cập nhật) rồi thoát. Làm xong yêu cầu thì chạy lại lệnh đó. Luôn giữ lệnh này chạy suốt phiên: yêu cầu gửi lúc AI chưa nghe sẽ nằm chờ và được làm khi lệnh chạy lại.
+   - Yêu cầu `update` (khách bấm "Cập nhật ngay" trên thanh báo bản mới của form: khách đã đồng ý): gọi `cap_nhat`, rồi nhắn khách: "Đã tải bản mới. Bấm Tạo mới và nhắn: Mở Brief cho tôi." Ở phiên mới, gọi `cai_dat` để cài nốt phần dựng rồi `mo_brief`. Đang có việc dựng chạy thì báo khách chờ xong rồi bấm lại.
 3. Trước mỗi bước, gọi `lay_quy_tac` với đúng bước đó (`y-tuong`, `brief`, `canh`, `thiet-ke`, `am-thanh`, `mau`, `kiem-tra`, `anh-cuon`, `khong-lo-mat`, `su-co`, `tl-<thể loại>`, hoặc `kt-<tên>` cho kho kiến thức) và làm theo. Khi chọn bố cục, thành phần hay điền bảng cảnh, gọi `dm-bo-cuc`, `dm-thanh-phan`, `dm-tuy-chon`, `dm-nen-phu` (Ảnh nền, Lớp phủ): form chỉ hiện số và ảnh, ý nghĩa từng mã nằm ở đó.
 4. **Trước khi viết kịch bản dựng: đọc hết Brief, không đọc lướt.** Đọc từng tab và từng tab con, gồm cả các ô do AI đã chọn từ trước:
    - Dự án, Thương hiệu, Chữ, Âm thanh, Dựng.
    - Tab Cảnh, với từng tab con Ảnh nền, Lớp phủ, Bố cục, Thành phần: thứ đã chọn, mục gắn sao, mục bị ẩn (không bao giờ dùng), mẫu phong cách đang áp, các cảnh đã vẽ được giữ lại, và **từng tài liệu phong cách khách tải lên** (mở xem từng ảnh, từng link, không bỏ cái nào).
    - Bảng cảnh: từng dòng.
    - Âm lượng: ô khách để trống là dùng mức mặc định của bộ máy (đã có sẵn trong brief). Chỉ ô khách tự gõ số mới là yêu cầu của khách. Dựng xong, bước kiểm tra đo lại âm thanh: được chỉnh các mức khách để trống thêm một lần cho cân hơn, không đổi số khách đã gõ.
+   - Nhạc nền: bài khách đã chọn luôn dùng trước. Khách chưa chọn: gọi `thu_vien_nhac(mood)` với mood của video, chọn bài hợp trong thư mục nhạc của khách. Không có bài nào hợp: nói rõ với khách và đưa đúng tên bài CapCut trong kết quả, chép nguyên văn từng ký tự, kèm mục CapCut để khách tìm và bấm tải (CapCut › Âm thanh › mục hoặc ô tìm). Khách cũng có thể tải bài lên ở tab Âm thanh hoặc bỏ vào thư mục nhạc. Không có nhạc thì vẫn dựng, không nhạc nền, và nói cho khách biết.
+   - Hiệu ứng âm thanh: bộ máy tự chọn và xoay vòng nhiều biến thể cho mỗi loại; khách có thư mục SFX riêng trong thư mục nhạc thì bộ máy dùng của khách trước.
 
    Ghi vào kịch bản dựng mục `brief_ledger` theo quy tắc `brief`: mỗi trường đã đọc dùng thế nào, chỗ nào chưa làm được thì ghi lý do. Bước kiểm `brief_use` chặn render nếu thiếu.
 5. Các việc nặng chạy bằng `chay_buoc(buoc, du_an, nguon)`, rồi theo dõi bằng `tien_do(viec)` cho đến khi `state` là `ok` hoặc `error`.
