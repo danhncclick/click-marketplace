@@ -1,0 +1,7 @@
+{
+  "description": "NBD Video: keep the AI listening to the Brief form (bootstrap/bootstrap.py, def hook)",
+  "hooks": {
+    "SessionStart": [{"hooks": [{"type": "command", "command": "\"${CLAUDE_PLUGIN_ROOT}/bootstrap/hook.cmd\" start", "timeout": 15}]}],
+    "Stop": [{"hooks": [{"type": "command", "command": "\"${CLAUDE_PLUGIN_ROOT}/bootstrap/hook.cmd\" stop", "timeout": 20}]}]
+  }
+}

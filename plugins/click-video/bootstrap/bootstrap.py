@@ -18,6 +18,7 @@ Same bootstrap for Claude Code and Codex, Windows and macOS (user 10/11, 11/11):
 (Claude Code), the CLICK_LICENSE_KEY variable, or the kich_hoat tool (asked in the chat, kept for this user only: DPAPI on
 Windows, the login Keychain on the Mac).
 Usage: start.cmd serve | start.cmd cli <wait|status|activate KEY>   (Mac: sh start.sh …)
+       hook.cmd start|stop   (Claude Code hooks, hooks/hooks.json; Mac: sh hook.sh …)
 """
 import base64
 import concurrent.futures
@@ -790,9 +791,68 @@ def drop_old_runtime():
         log(f"chưa xoá được bản Python cũ: {e}")
 
 
+def _brief_open():
+    """The Brief form of this machine answers (it outlives a closed chat): its address, else ""."""
+    for port in range(8765, 8771):
+        try:
+            with urllib.request.urlopen(f"http://127.0.0.1:{port}/api/lang", timeout=0.4) as r:
+                if r.status == 200:
+                    return f"http://127.0.0.1:{port}"
+        except Exception:  # noqa: BLE001 - nothing there
+            continue
+    return ""
+
+
+def hook(event):
+    """Claude Code hooks (user 16/11: a customer's Brief said "AI chưa kết nối" now and then although Claude was open). The form
+    hears the AI only while `click-engine wait` runs in the AI's session, and that command exits after each request: when the
+    AI ended its turn without starting it again, the form waited for nobody. Now:
+      start: a new session where the form is open or requests wait is told to start listening first;
+      stop:  the AI cannot end a turn while the form is open (or requests wait) and nobody listens: it is sent back once to
+             start `click-engine wait` in the background. Stdlib only, nothing downloaded, nothing sent anywhere."""
+    try:
+        data = json.loads(sys.stdin.read() or "{}")
+    except ValueError:
+        data = {}
+    inbox = os.path.join(DATA, "app", "work", "_inbox")
+    if not os.path.isdir(inbox):
+        return 0
+    beat = os.path.join(inbox, ".waiting")
+
+    def heard():
+        try:
+            return time.time() - os.path.getmtime(beat) < 10
+        except OSError:
+            return False
+    waiting = sorted(f for f in os.listdir(inbox) if f.endswith(".json"))
+    form = _brief_open()
+    if not (form or waiting) or heard():
+        return 0
+    root = os.environ.get("CLAUDE_PLUGIN_ROOT", "")
+    run = "click-engine wait" + (f' (nếu không có lệnh này: "{os.path.join(root, "bin", "click-engine")}" wait)' if root else "")
+    need = (f"Form Brief đang mở ({form})" if form else "Có yêu cầu từ form Brief") + (f", {len(waiting)} yêu cầu đang chờ AI nhận" if waiting else "")
+    if event == "start":
+        print(json.dumps({"hookSpecificOutput": {"hookEventName": "SessionStart", "additionalContext":
+              f"{need}. Việc đầu tiên của phiên, trước khi trả lời: gọi trang_thai rồi chạy NỀN (Bash, run_in_background) lệnh {run}, "
+              "để form hiện 'AI sẵn sàng'. Lệnh in ra một yêu cầu rồi thoát: làm xong yêu cầu thì chạy lại ngay."}}, ensure_ascii=False))
+        return 0
+    if data.get("stop_hook_active"):  # sent back once already: never trap the AI in a loop
+        return 0
+    for _ in range(6):  # started in the background just now: the first beat comes within 2 s
+        time.sleep(1)
+        if heard():
+            return 0
+    print(json.dumps({"decision": "block", "reason":
+          f"{need} nhưng không có AI nghe nên khách thấy 'AI chưa kết nối'. Chạy NỀN (Bash, run_in_background) lệnh {run} ngay bây giờ"
+          + (" rồi làm yêu cầu nó in ra" if waiting else "") + "; sau đó mới kết thúc lượt. Không cần nói gì thêm với khách về việc này."}, ensure_ascii=False))
+    return 0
+
+
 def main(argv):
-    os.makedirs(DATA, exist_ok=True)
     cmd = argv[1] if len(argv) > 1 else "serve"
+    if cmd == "hook":  # before anything else: fast, read-only
+        return hook(argv[2] if len(argv) > 2 else "")
+    os.makedirs(DATA, exist_ok=True)
     threading.Thread(target=drop_old_runtime, daemon=True).start()
     if cmd == "serve":
         remember_data()
