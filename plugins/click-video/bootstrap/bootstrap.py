@@ -772,6 +772,7 @@ class Mcp:
                     continue
                 self.pool.submit(self.handle, m)
         self.pool.shutdown(wait=False, cancel_futures=True)
+        os._exit(0)  # the chat closed its pipe: leave, a tool still running would keep a dead session's engine alive (report 16/11)
 
 
 def drop_old_runtime():
