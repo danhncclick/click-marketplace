@@ -1,4 +1,6 @@
 #!/bin/sh
-# click-engine wait | status | activate KEY — for Git Bash: hands over to click-engine.cmd
-here="$(cd "$(dirname "$0")" && pwd -W 2>/dev/null || cd "$(dirname "$0")" && pwd)"
-exec cmd //d //c "$here\\click-engine.cmd" "$@"
+# click-engine wait | status | activate KEY - for Git Bash: hands over to click-engine.cmd.
+# The quoted path goes through a variable that cmd expands itself: given straight, cmd splits a path with a space
+# (C:\Users\Ten Khach\...) at the space.
+here="$(cd "$(dirname "$0")" && { pwd -W 2>/dev/null || pwd; })"
+CLICK_ENGINE_CMD="\"$here/click-engine.cmd\"" exec cmd //d //c %CLICK_ENGINE_CMD% "$@"

@@ -865,6 +865,9 @@ def main(argv):
         except NeedEula as e:
             sys.stderr.write(f"CLICK: {e} Mở trợ lý AI có cài plugin và nhắn bất kỳ yêu cầu dựng video nào để xem và đồng ý.\n")
             return 3
+        except Refused as e:  # no key yet, a revoked key...: one plain line, not a traceback
+            sys.stderr.write(f"CLICK: {e}\n")
+            return 3
         return server.cli(["click-engine", *argv[2:]])
     sys.stderr.write(__doc__)
     return 2
