@@ -63,6 +63,42 @@ def _pointed():
 
 
 DATA = os.environ.get("CLAUDE_PLUGIN_DATA") or os.environ.get("PLUGIN_DATA") or _pointed() or HOME_DIR
+CLAUDE = bool(os.environ.get("CLAUDE_PLUGIN_ROOT"))  # Claude Code puts the plugin's bin/ on PATH; Antigravity and Codex do not
+
+
+def engine_cmd():
+    """How the AI starts click-engine (the Brief form's listener) in its own shell: by name in Claude Code, elsewhere by the
+    full path of the plugin's bin/ (Antigravity, user 18/11: its shell has no click-engine on PATH)."""
+    return "click-engine" if CLAUDE else full_cmd()
+
+
+def full_cmd():
+    """click-engine by its full path, written so the agent's shell runs it as it is: on Windows the short 8.3 form (no spaces:
+    PowerShell and cmd both take it bare), else PowerShell's call form; on the Mac the quoted path."""
+    path = os.path.join(os.path.dirname(HERE), "bin", "click-engine" if MAC else "click-engine.cmd")
+    if MAC:
+        return f'"{path}"'
+    try:  # the folder in its short form, the file under its own name (the AI reads it)
+        buf = ctypes.create_unicode_buffer(1024)
+        if ctypes.windll.kernel32.GetShortPathNameW(os.path.dirname(path), buf, 1024) and " " not in buf.value:
+            return os.path.join(buf.value, os.path.basename(path))
+    except (AttributeError, OSError):
+        pass
+    return f'& "{path}"'
+
+
+def with_cmd(x):
+    """Every "click-engine wait|status|activate" the engine says to the AI, with the command this client can run."""
+    cmd = engine_cmd()
+    if cmd == "click-engine":
+        return x
+    if isinstance(x, str):
+        return re.sub(r'(?<![\w/\\"-])click-engine(?= (?:wait|status|activate))', lambda m: cmd, x)
+    if isinstance(x, dict):
+        return {k: with_cmd(v) for k, v in x.items()}
+    if isinstance(x, list):
+        return [with_cmd(v) for v in x]
+    return x
 
 
 def remember_data():
@@ -455,8 +491,13 @@ def watch_updates(every=86400):
 
 
 def prepare():
-    """The engine module: the installed one; a newer one on the server is only noted (ban-moi.json) and installed when the
-    customer agrees (tool cap_nhat), unless the server marks it mandatory. First start: the server's one."""
+    """The engine module (the terminal's click-engine): fetch_engine, then import it into this process."""
+    return import_engine(fetch_engine())
+
+
+def fetch_engine():
+    """The engine on disk, checked: the installed one; a newer one on the server is only noted (ban-moi.json) and installed
+    when the customer agrees (tool cap_nhat), unless the server marks it mandatory. First start: the server's one."""
     os.makedirs(ENGINES, exist_ok=True)
     note_runtime()
     try:
@@ -481,6 +522,10 @@ def prepare():
     m = installed()
     if not m:
         raise RuntimeError("Chưa có bộ máy: cần kết nối mạng lần đầu.")
+    return m
+
+
+def import_engine(m):
     for p in (SITE, os.path.join(ENGINES, m["version"])):
         if p not in sys.path:
             sys.path.insert(0, p)
@@ -488,6 +533,137 @@ def prepare():
     importlib.invalidate_caches()
     from click_engine import server  # noqa: E402  (the engine checks its licence again on each call)
     return server, m["version"]
+
+
+# ---------------------------------------------------------------- the engine in its own process
+# User 18/11: updating took a new chat and a second message, although the Brief has an update button. The engine is one
+# compiled module: once imported it cannot be swapped inside this process. It runs in a child process instead (this same
+# file, "engine-child"), so cap_nhat stops it, installs the new one and starts it again in the same chat.
+CHILD_ENV = ("CLICK_WORKSPACE", "CLICK_LICENSE", "CLICK_LICENSE_KEY")  # set here after the child started (roots, kich_hoat)
+
+
+class EngineChild:
+    def __init__(self):
+        flags = 0x08000000 if not MAC else 0  # CREATE_NO_WINDOW: no console flashing up on Windows
+        env = {**os.environ, "CLAUDE_PLUGIN_DATA": DATA}
+        self.p = subprocess.Popen([sys.executable, "-I", "-X", "utf8", os.path.abspath(__file__), "engine-child"],
+                                  stdin=subprocess.PIPE, stdout=subprocess.PIPE, env=env, creationflags=flags)
+        self.lock, self.waits, self.n = threading.Lock(), {}, 0
+        threading.Thread(target=self._read, daemon=True).start()
+        meta = self.ask("meta", timeout=120)
+        self.TOOLS = [(n, None, d, sc) for n, d, sc in meta["tools"]]
+        self.INSTRUCTIONS, self.version = meta["instructions"], meta["version"]
+
+    def _read(self):
+        for raw in self.p.stdout:
+            try:
+                msg = json.loads(raw)
+            except ValueError:
+                continue
+            fut = self.waits.pop(msg.get("id"), None)
+            if fut:
+                fut.set_result(msg)
+        for fut in list(self.waits.values()):  # the child ended: nobody waits forever
+            fut.set_result({"error": "Bộ máy dừng giữa chừng: gọi lại công cụ."})
+        self.waits.clear()
+
+    def ask(self, op, timeout=None, **kw):
+        with self.lock:
+            self.n += 1
+            mid = self.n
+            fut = concurrent.futures.Future()
+            self.waits[mid] = fut
+            try:
+                self.p.stdin.write(json.dumps({"id": mid, "op": op, **kw}, ensure_ascii=False).encode() + b"\n")
+                self.p.stdin.flush()
+            except OSError:
+                self.waits.pop(mid, None)
+                raise RuntimeError("Bộ máy không chạy: gọi lại công cụ.")
+        r = fut.result(timeout=timeout)
+        if "error" in r:
+            raise RuntimeError(r["error"])
+        return r.get("result")
+
+    def call(self, name, args):
+        return self.ask("call", name=name, args=args or {}, env={k: os.environ[k] for k in CHILD_ENV if os.environ.get(k)})
+
+    def busy(self):
+        return bool(self.ask("busy", timeout=30))
+
+    def stop(self):
+        try:
+            self.p.stdin.close()
+            self.p.wait(15)
+        except Exception:  # noqa: BLE001
+            self.p.kill()
+
+
+class EngineHere:
+    """The engine imported into this process (the child could not start): as before, a new version needs a new chat."""
+    def __init__(self, m):
+        self.server, self.version = import_engine(m)
+        self.TOOLS, self.INSTRUCTIONS = self.server.TOOLS, self.server.INSTRUCTIONS
+
+    def call(self, name, args):
+        return next(f for n, f, _, _ in self.TOOLS if n == name)(**(args or {}))
+
+    def busy(self):
+        from click_engine import runner
+        return any(j.get("state") == "running" for j in runner.JOBS.values())
+
+    def stop(self):
+        pass
+
+
+def start_engine(m):
+    try:
+        return EngineChild()
+    except Exception as e:  # noqa: BLE001
+        log("không chạy được bộ máy ở tiến trình riêng, chạy chung:", e)
+        return EngineHere(m)
+
+
+def engine_child():
+    """The child: one JSON request per line on stdin, one answer per line on stdout; the engine's own prints go to stderr.
+    It ends with its parent (stdin closed), like the old in-process engine did (report 16/11)."""
+    out = sys.stdout.buffer
+    sys.stdout = sys.stderr
+    server, version = import_engine(installed())
+    lock = threading.Lock()
+    pool = concurrent.futures.ThreadPoolExecutor(16)
+
+    def answer(msg):
+        try:
+            op = msg.get("op")
+            if op == "meta":
+                r = {"tools": [[n, d, sc] for n, _, d, sc in server.TOOLS], "instructions": server.INSTRUCTIONS, "version": version}
+            elif op == "busy":
+                from click_engine import runner
+                r = any(j.get("state") == "running" for j in runner.JOBS.values())
+            elif op == "call":
+                os.environ.update({k: v for k, v in (msg.get("env") or {}).items() if k in CHILD_ENV and v})
+                fn = next((f for n, f, _, _ in server.TOOLS if n == msg.get("name")), None)
+                if not fn:
+                    raise RuntimeError("Không có công cụ: " + str(msg.get("name")))
+                r = fn(**(msg.get("args") or {}))
+            else:
+                raise RuntimeError("yêu cầu lạ")
+            reply = {"id": msg.get("id"), "result": r}
+        except Exception as e:  # noqa: BLE001 - the parent shows it as the tool's error
+            log("lỗi công cụ (bộ máy):", traceback.format_exc())
+            reply = {"id": msg.get("id"), "error": str(e)}
+        data = json.dumps(reply, ensure_ascii=False, default=str).encode() + b"\n"
+        with lock:
+            out.write(data)
+            out.flush()
+
+    for raw in sys.stdin.buffer:
+        try:
+            msg = json.loads(raw)
+        except ValueError:
+            continue
+        pool.submit(answer, msg)
+    os._exit(0)
 
 
 # ---------------------------------------------------------------- MCP over stdio
@@ -611,18 +787,22 @@ class Mcp:
             self.out.write(json.dumps(msg, ensure_ascii=False).encode() + b"\n")
             self.out.flush()
 
+    def boot(self):
+        self.engine = start_engine(fetch_engine())
+        self.version = self.engine.version
+
     def load(self):
         try:
             try:
-                self.engine, self.version = prepare()
+                self.boot()
             except NeedEula as need:
                 if not self.agree_flow(need):
                     return  # waits for dong_y_thoa_thuan
-                self.engine, self.version = prepare()
+                self.boot()
             except NoKey as e:
                 self.state = "chờ người dùng nhập key"
                 if self.setup_form():
-                    self.engine, self.version = prepare()
+                    self.boot()
                     self.eula, self.state, self.error = None, "sẵn sàng", ""
                     if self.ready:
                         self.send({"jsonrpc": "2.0", "method": "notifications/tools/list_changed"})
@@ -640,24 +820,41 @@ class Mcp:
 
     UPDATE_TOOL = {"name": "cap_nhat", "description": "Có bản NBD Video mới (xem trang_thai › ban_moi). Báo khách ngay khi thấy, kèm lời khuyên: "
                    "làm xong dự án đang dở rồi hãy cập nhật, dự án đã làm vẫn giữ nguyên. CHỈ gọi khi chính khách đồng ý cập nhật; không tự gọi. "
-                   "Từ chối khi đang có việc dựng chạy. Sau khi gọi: dặn khách mở phiên mới, ở phiên mới gọi cai_dat để cập nhật phần dựng.",
+                   "Từ chối khi đang có việc dựng chạy. Sau khi gọi: làm theo viec_tiep_theo trong kết quả (thường là cho_cai_dat lặp lại rồi mo_brief, ngay trong phiên này).",
                    "inputSchema": {"type": "object", "properties": {}}}
 
     def update_now(self):
         try:
-            from click_engine import runner
-            if any(j.get("state") == "running" for j in runner.JOBS.values()):
+            if self.engine.busy():
                 return "Đang có việc dựng chạy: chờ xong rồi mới cập nhật.", True
         except Exception:  # noqa: BLE001
             pass
         m = manifest()  # a fresh, signed manifest and download link
         install_wheels(m)
-        install_engine(m)
+        child = isinstance(self.engine, EngineChild)
+        if child:
+            self.engine.stop()  # its files are free to be replaced
+        try:
+            install_engine(m)
+        except Exception:
+            if child:
+                self.boot()  # the old engine again, the error goes to the AI
+            raise
         set_pending(None)
         open(REFRESH_FLAG, "w").close()
         log("khách đồng ý cập nhật lên", m["version"])
-        return (f"Đã tải bản {m['version']}. Để dùng: đóng phiên này và mở phiên mới của trợ lý AI. Ở phiên mới, trợ lý cài nốt phần dựng "
-                "(vài phút, có báo tiến độ). Dự án và thư viện của khách giữ nguyên."), False
+        if not child:
+            return (f"Đã tải bản {m['version']}. Để dùng: đóng phiên này và mở phiên mới của trợ lý AI. Ở phiên mới, trợ lý cài nốt phần dựng "
+                    "(vài phút, có báo tiến độ). Dự án và thư viện của khách giữ nguyên."), False
+        self.boot()  # the new engine, same chat (user 18/11)
+        self.send({"jsonrpc": "2.0", "method": "notifications/tools/list_changed"})
+        st = self.engine.call("cai_dat", {})
+        return json.dumps({"xong_tai": m["version"], "cai_dat": st,
+                           "bao_khach": f"Đang cập nhật NBD Video lên bản {m['version']}: cài phần dựng vài phút, form Brief tạm đóng rồi tự mở lại. "
+                                        "Dự án và thư viện giữ nguyên.",
+                           "viec_tiep_theo": "Không cần mở phiên mới. Viết bao_khach cho khách, rồi gọi cho_cai_dat lặp lại (mỗi lần viết câu bao_khach của nó) "
+                                             "cho tới khi xong; xong thì gọi mo_brief với dự án khách đang mở, gửi lại link Brief, rồi chạy lại click-engine wait."},
+                          ensure_ascii=False), False
 
     def tools(self):
         if self.engine:
@@ -681,12 +878,12 @@ class Mcp:
         if self.engine and name == "cap_nhat" and pending():
             return self.update_now()
         if self.engine:
-            fn = next((f for n, f, _, _ in self.engine.TOOLS if n == name), None)
-            if fn:
-                r = fn(**(args or {}))
+            if any(n == name for n, _, _, _ in self.engine.TOOLS):
+                r = self.engine.call(name, args)
                 if name == "trang_thai" and isinstance(r, dict) and pending():
                     r["ban_moi"] = {**pending(), "huong_dan": "Báo khách có bản mới; khuyên làm xong dự án đang dở rồi mới cập nhật. "
                                     "Khách đồng ý thì gọi cap_nhat."}
+                r = with_cmd(r)
                 return r if isinstance(r, str) else json.dumps(r, ensure_ascii=False), False
         if name == "kich_hoat" and self.need_key:
             key = str((args or {}).get("key", "")).strip().upper()
@@ -724,7 +921,7 @@ class Mcp:
                 self.client_caps = params.get("capabilities") or {}
                 result = {"protocolVersion": params.get("protocolVersion", "2025-06-18"), "capabilities": {"tools": {"listChanged": True}},
                           "serverInfo": {"name": "click-video", "version": CONFIG.get("version", "1")},
-                          "instructions": self.engine.INSTRUCTIONS if self.engine else
+                          "instructions": with_cmd(self.engine.INSTRUCTIONS) if self.engine else
                           "Bộ máy dựng video CLICK. Gọi trang_thai trước; khi bộ máy tải xong, danh sách công cụ tự cập nhật. Trả lời người dùng bằng tiếng Việt."}
             elif method == "notifications/initialized":
                 self.ready = True
@@ -829,9 +1026,27 @@ def hook(event):
     form = _brief_open()
     if not (form or waiting) or heard():
         return 0
-    root = os.environ.get("CLAUDE_PLUGIN_ROOT", "")
-    run = "click-engine wait" + (f' (nếu không có lệnh này: "{os.path.join(root, "bin", "click-engine")}" wait)' if root else "")
+    ag = "conversationId" in data or "hookEventName" in data  # Antigravity: camelCase payload, its own output contract
+    full = os.path.join(os.path.dirname(HERE), "bin", "click-engine")
+    run = f"{full_cmd()} wait" if ag else f'click-engine wait (nếu không có lệnh này: "{full}" wait)'
     need = (f"Form Brief đang mở ({form})" if form else "Có yêu cầu từ form Brief") + (f", {len(waiting)} yêu cầu đang chờ AI nhận" if waiting else "")
+    if ag:
+        if event == "start":
+            print(json.dumps({"injectSteps": [{"systemMessage": {"systemMessage":
+                  f"{need}. Việc đầu tiên của phiên, trước khi trả lời: gọi tool trang_thai của click-video rồi chạy lệnh {run} ở chế độ chạy nền "
+                  "(không chờ nó kết thúc), để form hiện 'AI sẵn sàng'. Lệnh in ra một yêu cầu rồi thoát: làm xong yêu cầu thì chạy lại ngay."}}]},
+                  ensure_ascii=False))
+            return 0
+        if data.get("continuationActive") or data.get("terminationReason") not in (None, "", "NO_TOOL_CALL"):
+            return 0  # sent back once already, or the user stopped it / an error: never trap the agent in a loop
+        for _ in range(6):
+            time.sleep(1)
+            if heard():
+                return 0
+        print(json.dumps({"decision": "continue", "reason":
+              f"{need} nhưng không có AI nghe nên khách thấy 'AI chưa kết nối'. Chạy ngay lệnh {run} ở chế độ chạy nền (không chờ nó kết thúc)"
+              + (" rồi làm yêu cầu nó in ra" if waiting else "") + "; sau đó mới kết thúc lượt. Không cần nói gì thêm với khách về việc này."}, ensure_ascii=False))
+        return 0
     if event == "start":
         print(json.dumps({"hookSpecificOutput": {"hookEventName": "SessionStart", "additionalContext":
               f"{need}. Việc đầu tiên của phiên, trước khi trả lời: gọi trang_thai rồi chạy NỀN (Bash, run_in_background) lệnh {run}, "
@@ -855,6 +1070,9 @@ def main(argv):
         return hook(argv[2] if len(argv) > 2 else "")
     os.makedirs(DATA, exist_ok=True)
     threading.Thread(target=drop_old_runtime, daemon=True).start()
+    if cmd == "engine-child":  # started by EngineChild, never by hand
+        engine_child()
+        return 0
     if cmd == "serve":
         remember_data()
         Mcp().run()
