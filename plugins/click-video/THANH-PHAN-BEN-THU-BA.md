@@ -62,5 +62,8 @@ Văn bản đầy đủ của từng giấy phép trong mục B được chép v
 |---|---|---|
 | K01–K07 (quanh người nói) | claude-video-effects (gói "aidesign-video-skills", AI Design) | MIT |
 | K08–K14 (chữ và nhịp kể) | video-shotcraft (gói "aidesign-video-skills", AI Design) | Apache-2.0 |
+| Đường cong Keyframe Cubic-Bezier & Mặt nạ hình học | OpenCut (`OpenCut-app/opencut-classic`) | MIT |
+| Hiệu ứng GPU (Dither, Posterize, Wave, Twirl, Ripple, Tilt-Shift, Gradient Map, Solarize, Emboss, Ultra Key Chroma), Bộ lọc màu, Chữ động từng từ/chữ | OpenReel Video (`Augani/openreel-video`) | MIT |
+| Chuyển cảnh WebGL2 2-texture (CrossZoom, DirectionalWarp, DreamyZoom, GlitchMemories, Swirl, Doorway, WindowBlinds, Cube, WhipPan…) | gl-transitions (`gl-transitions/gl-transitions`) | MIT |
 
 Các thành phần K được viết mới bằng ngôn ngữ thiết kế của NBD Video, không chứa mã của hai nguồn trên; ghi ở đây để ghi công ý tưởng.
